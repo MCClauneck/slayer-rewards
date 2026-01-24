@@ -7,8 +7,21 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 import java.util.concurrent.Executor;
 
+/**
+ * Main entry point for the SlayerRewards extension.
+ * <p>
+ * This class implements the IMCExtension interface to integrate with
+ * the MCEconomy extension system.
+ */
 public class SlayerRewards implements IMCExtension {
 
+    /**
+     * Called when the extension is loaded by MCEconomy.
+     * Initializes the provider and registers the event listener.
+     *
+     * @param plugin   The host JavaPlugin.
+     * @param executor The shared executor service.
+     */
     @Override
     public void onLoad(JavaPlugin plugin, Executor executor) {
         // Initialize the logic provider
@@ -24,6 +37,12 @@ public class SlayerRewards implements IMCExtension {
         plugin.getLogger().info("[SlayerRewards] Extension loaded successfully.");
     }
 
+    /**
+     * Called when the extension is disabled.
+     *
+     * @param plugin   The host JavaPlugin.
+     * @param executor The shared executor service.
+     */
     @Override
     public void onDisable(JavaPlugin plugin, Executor executor) {
         plugin.getLogger().info("[SlayerRewards] Extension disabled.");

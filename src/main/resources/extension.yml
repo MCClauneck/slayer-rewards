@@ -5,7 +5,7 @@ name: SlayerRewards
 version: ${project_version}
 
 # The full package path to your main class
-main: ${project_group}.SlayerRewards
+main: ${project_group}.slayerrewards.SlayerRewards
 
 # Optional: Ensure MCEconomy is loaded first
 base:

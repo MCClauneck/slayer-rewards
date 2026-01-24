@@ -1,4 +1,4 @@
-package io.github.mcclauneck;
+package io.github.mcclauneck.slayerrewards;
 
 import io.github.mcengine.mcextension.api.IMCExtension;
 import org.bukkit.plugin.java.JavaPlugin;

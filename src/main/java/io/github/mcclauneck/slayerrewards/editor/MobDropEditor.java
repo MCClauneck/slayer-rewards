@@ -189,12 +189,16 @@ public class MobDropEditor implements Listener {
         if (event.isShiftClick() && event.isRightClick() && event.getSlot() < 45 && event.getClickedInventory() == event.getView().getTopInventory()) {
             if (event.getCurrentItem() != null && event.getCurrentItem().getType() != Material.AIR) {
                 event.setCancelled(true);
-                player.closeInventory();
                 
                 // Calculate absolute index (Page Offset + Slot)
                 int absoluteIndex = event.getSlot() + ((session.page - 1) * 45);
                 pendingChanceEdit.put(player.getUniqueId(), absoluteIndex);
                 
+                // FIX: Save page state before closing so the item exists in YAML
+                // If we don't save here, 'updateChance' might try to set chance on a non-existent item key
+                savePage(player, session, event.getView().getTopInventory());
+                
+                player.closeInventory();
                 player.sendMessage(ChatColor.GREEN + "Enter drop chance (0-100) in chat:");
             }
         }

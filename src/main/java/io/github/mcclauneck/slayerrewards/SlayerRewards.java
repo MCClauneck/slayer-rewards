@@ -1,10 +1,23 @@
 package io.github.mcclauneck.slayerrewards;
 
+import io.github.mcclauneck.slayerrewards.command.SlayerRewardsCommand;
 import io.github.mcclauneck.slayerrewards.common.SlayerRewardsProvider;
+import io.github.mcclauneck.slayerrewards.editor.MobDropEditor;
 import io.github.mcclauneck.slayerrewards.listeners.SlayerRewardsListener;
+import io.github.mcclauneck.slayerrewards.tabcompleter.SlayerRewardsTabCompleter;
 import io.github.mcengine.mcextension.api.IMCExtension;
+import org.bukkit.Bukkit;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandMap;
+import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.Executor;
 
 /**
@@ -15,26 +28,69 @@ import java.util.concurrent.Executor;
  */
 public class SlayerRewards implements IMCExtension {
 
+    private SlayerRewardsProvider provider;
+    private MobDropEditor editor;
+
     /**
      * Called when the extension is loaded by MCEconomy.
-     * Initializes the provider and registers the event listener.
+     * Initializes the provider, editor, listeners, and commands.
      *
      * @param plugin   The host JavaPlugin.
      * @param executor The shared executor service.
      */
     @Override
     public void onLoad(JavaPlugin plugin, Executor executor) {
-        // Initialize the logic provider
-        SlayerRewardsProvider provider = new SlayerRewardsProvider(plugin);
+        // 1. Initialize Logic Providers
+        this.provider = new SlayerRewardsProvider(plugin);
+        
+        // Create the example file immediately after provider (and folder) setup
+        createExampleFile(plugin);
+        
+        this.editor = new MobDropEditor(plugin, provider.getMobsFolder());
 
-        // Register the event listener
-        // We pass the provider so the listener knows how to give rewards
+        // 2. Register Event Listeners
         plugin.getServer().getPluginManager().registerEvents(
             new SlayerRewardsListener(executor, provider), 
             plugin
         );
+        plugin.getServer().getPluginManager().registerEvents(editor, plugin);
+
+        // 3. Register Command via Reflection
+        registerCommand(plugin);
         
         plugin.getLogger().info("[SlayerRewards] Extension loaded successfully.");
+    }
+
+    /**
+     * Registers the /slayerrewards command dynamically into the Bukkit CommandMap.
+     */
+    private void registerCommand(JavaPlugin plugin) {
+        try {
+            Field commandMapField = Bukkit.getServer().getClass().getDeclaredField("commandMap");
+            commandMapField.setAccessible(true);
+            CommandMap commandMap = (CommandMap) commandMapField.get(Bukkit.getServer());
+
+            SlayerRewardsCommand executor = new SlayerRewardsCommand(editor);
+            SlayerRewardsTabCompleter tabCompleter = new SlayerRewardsTabCompleter(provider);
+
+            Command cmd = new Command("slayerrewards", "Manage mob drops", "/slayerrewards edit <mob>", Collections.singletonList("slayer")) {
+                @Override
+                public boolean execute(CommandSender sender, String commandLabel, String[] args) {
+                    return executor.onCommand(sender, this, commandLabel, args);
+                }
+
+                @Override
+                public List<String> tabComplete(CommandSender sender, String alias, String[] args) throws IllegalArgumentException {
+                    return tabCompleter.onTabComplete(sender, this, alias, args);
+                }
+            };
+
+            commandMap.register(plugin.getName(), cmd);
+
+        } catch (Exception e) {
+            plugin.getLogger().severe("Failed to register /slayerrewards command: " + e.getMessage());
+            e.printStackTrace();
+        }
     }
 
     /**
@@ -45,6 +101,42 @@ public class SlayerRewards implements IMCExtension {
      */
     @Override
     public void onDisable(JavaPlugin plugin, Executor executor) {
+        this.provider = null;
+        this.editor = null;
         plugin.getLogger().info("[SlayerRewards] Extension disabled.");
+    }
+
+    /**
+     * Creates a default 'zombie.yml' file if no configuration exists.
+     * <p>
+     * This serves as a template for administrators to understand how to configure
+     * money rewards and drop settings.
+     * </p>
+     *
+     * @param plugin The host plugin instance for logging.
+     */
+    private void createExampleFile(JavaPlugin plugin) {
+        File folder = provider.getMobsFolder();
+        File file = new File(folder, "zombie.yml");
+
+        if (file.exists()) return;
+
+        try (FileWriter writer = new FileWriter(file)) {
+            String content = """
+                    currency: coin
+                    amount: 100-200
+                    
+                    # If true, vanilla drops (Rotten Flesh, etc.) will be removed.
+                    cancel_default_drops: false
+                    
+                    # Custom items are best added using the in-game GUI.
+                    # Command: /slayerrewards edit zombie
+                    item_drop:
+                    """;
+            writer.write(content);
+            plugin.getLogger().info("Created example mob config: zombie.yml");
+        } catch (IOException e) {
+            plugin.getLogger().severe("Failed to create example file: " + e.getMessage());
+        }
     }
 }

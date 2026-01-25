@@ -73,32 +73,42 @@ public class MobDropEditor implements Listener {
 
         // Load Items
         ConfigurationSection section = config.getConfigurationSection("item_drop");
-        List<Integer> keys = new ArrayList<>();
+        
+        // Calculate max key for pagination logic
+        int maxKey = 0;
         if (section != null) {
-            section.getKeys(false).forEach(k -> keys.add(Integer.parseInt(k)));
-            Collections.sort(keys); // Ensure numeric order
+            for (String k : section.getKeys(false)) {
+                try {
+                    int key = Integer.parseInt(k);
+                    if (key > maxKey) maxKey = key;
+                } catch (NumberFormatException ignored) {}
+            }
         }
 
         // Pagination Logic (45 items per page)
         int itemsPerPage = 45;
-        int startIndex = (page - 1) * itemsPerPage;
-        int endIndex = Math.min(startIndex + itemsPerPage, keys.size());
+        // Calculate the starting ID for this page (e.g., Page 1 starts at 1, Page 2 starts at 46)
+        int startKey = (page - 1) * itemsPerPage + 1;
 
-        for (int i = startIndex; i < endIndex; i++) {
-            int key = keys.get(i);
-            ItemStack item = section.getItemStack(key + ".metadata");
-            if (item != null) {
-                // Inject Chance into Lore for visibility
-                double chance = section.getDouble(key + ".chance", 100.0);
-                ItemMeta meta = item.getItemMeta();
-                List<String> lore = meta.hasLore() ? meta.getLore() : new ArrayList<>();
-                lore.add(ChatColor.YELLOW + "----------------");
-                lore.add(ChatColor.GOLD + "Chance: " + chance + "%");
-                lore.add(ChatColor.GRAY + "Shift+Right Click to edit chance");
-                meta.setLore(lore);
-                item.setItemMeta(meta);
+        // Iterate through the GUI slots (0 to 44)
+        for (int i = 0; i < itemsPerPage; i++) {
+            int currentKey = startKey + i; // The YAML key expected for this slot
 
-                gui.setItem(i - startIndex, item);
+            if (section != null && section.contains(String.valueOf(currentKey))) {
+                ItemStack item = section.getItemStack(currentKey + ".metadata");
+                if (item != null) {
+                    // Inject Chance into Lore for visibility
+                    double chance = section.getDouble(currentKey + ".chance", 100.0);
+                    ItemMeta meta = item.getItemMeta();
+                    List<String> lore = meta.hasLore() ? meta.getLore() : new ArrayList<>();
+                    lore.add(ChatColor.YELLOW + "----------------");
+                    lore.add(ChatColor.GOLD + "Chance: " + chance + "%");
+                    lore.add(ChatColor.GRAY + "Shift+Right Click to edit chance");
+                    meta.setLore(lore);
+                    item.setItemMeta(meta);
+
+                    gui.setItem(i, item);
+                }
             }
         }
 
@@ -116,8 +126,9 @@ public class MobDropEditor implements Listener {
         }
 
         // Next Page Button (Slot 50)
-        // Show if we have more items than this page can hold OR if the page is full (allows creating new page)
-        if (keys.size() >= (startIndex + itemsPerPage)) {
+        // Show if we have items beyond this page OR if the current page is full (allows creating new items)
+        boolean pageFull = (gui.getItem(44) != null);
+        if (maxKey > (page * itemsPerPage) || pageFull) {
             gui.setItem(50, EditorUtil.createButton(Material.ARROW, "Next Page"));
         }
 

@@ -40,6 +40,8 @@ public class MobDropEditor implements Listener {
     private final Map<UUID, EditorSession> activeSessions = new HashMap<>();
     // Tracks players who are currently typing a chance value in chat
     private final Map<UUID, Integer> pendingChanceEdit = new HashMap<>();
+    // Tracks players switching pages to prevent InventoryCloseEvent from killing the session
+    private final Set<UUID> isSwitchingPages = new HashSet<>();
 
     /**
      * Constructs a new MobDropEditor.
@@ -159,12 +161,18 @@ public class MobDropEditor implements Listener {
             event.setCancelled(true);
 
             if (event.getSlot() == 48 && event.getCurrentItem().getType() == Material.ARROW) {
-                savePage(player, session, event.getInventory()); // Save before switch
+                // Page Switch Logic
+                isSwitchingPages.add(player.getUniqueId()); // Prevent session kill
+                savePage(player, session, event.getInventory());
                 openEditor(player, session.mobName, session.page - 1);
-            } else if (event.getSlot() == 50 && event.getCurrentItem().getType() == Material.ARROW) {
-                savePage(player, session, event.getInventory()); // Save before switch
+            } 
+            else if (event.getSlot() == 50 && event.getCurrentItem().getType() == Material.ARROW) {
+                // Page Switch Logic
+                isSwitchingPages.add(player.getUniqueId()); // Prevent session kill
+                savePage(player, session, event.getInventory());
                 openEditor(player, session.mobName, session.page + 1);
-            } else if (event.getSlot() == 49) {
+            } 
+            else if (event.getSlot() == 49) {
                 toggleDefaultDrops(player, session);
 
                 File file = new File(mobsFolder, session.mobName.toLowerCase() + ".yml");
@@ -199,12 +207,20 @@ public class MobDropEditor implements Listener {
      */
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
-        if (event.getPlayer() instanceof Player player && activeSessions.containsKey(player.getUniqueId())) {
-            // Check if we are closing to edit chat; if so, don't remove session/save yet
-            if (!pendingChanceEdit.containsKey(player.getUniqueId())) {
-                EditorSession session = activeSessions.remove(player.getUniqueId());
-                savePage(player, session, event.getInventory());
-                player.sendMessage(ChatColor.GREEN + "Mob drops saved!");
+        if (event.getPlayer() instanceof Player player) {
+            // If switching pages, ignore this close event (do not remove session)
+            if (isSwitchingPages.contains(player.getUniqueId())) {
+                isSwitchingPages.remove(player.getUniqueId());
+                return;
+            }
+
+            if (activeSessions.containsKey(player.getUniqueId())) {
+                // Check if we are closing to edit chat; if so, don't remove session/save yet
+                if (!pendingChanceEdit.containsKey(player.getUniqueId())) {
+                    EditorSession session = activeSessions.remove(player.getUniqueId());
+                    savePage(player, session, event.getInventory());
+                    player.sendMessage(ChatColor.GREEN + "Mob drops saved!");
+                }
             }
         }
     }
@@ -292,6 +308,7 @@ public class MobDropEditor implements Listener {
 
         try {
             config.save(file);
+            // Refresh provider cache here if implementing caching optimization
         } catch (IOException e) {
             e.printStackTrace();
         }

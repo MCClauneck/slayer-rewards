@@ -9,6 +9,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
@@ -172,11 +173,12 @@ public class MobDropEditor implements Listener {
         String title = event.getView().getTitle();
         if (!title.startsWith("Edit Drop:")) return;
 
-        // Block interaction with the bottom row of the top inventory
-        if (event.getClickedInventory() == event.getView().getTopInventory()) {
-            if (event.getSlot() >= 45) {
-                event.setCancelled(true);
-                
+        // 1. HARD BLOCK all interaction with the bottom row (45-53) regardless of inventory
+        if (event.getRawSlot() >= 45 && event.getRawSlot() <= 53) {
+            event.setCancelled(true);
+            
+            // Only process logic if it's the TOP inventory
+            if (event.getClickedInventory() == event.getView().getTopInventory()) {
                 EditorSession session = activeSessions.get(player.getUniqueId());
 
                 if (event.getSlot() == 45 && event.getCurrentItem() != null && event.getCurrentItem().getType() == Material.ARROW) {
@@ -203,15 +205,17 @@ public class MobDropEditor implements Listener {
                     player.closeInventory();
                     player.sendMessage(ChatColor.GREEN + "Enter reward amount (e.g. 10 or 10-20) in chat:");
                 }
-                return;
             }
-        } else if (event.isShiftClick()) {
-            // Cancel shift-clicks from the bottom inventory to prevent items moving into control slots
+            return;
+        }
+
+        // 2. Block shift-clicking from player's inventory to prevent items moving into control slots
+        if (event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY) {
             event.setCancelled(true);
             return;
         }
 
-        // Handle Chance Editing (Shift + Right Click on an item in the top inventory)
+        // 3. Handle Chance Editing (Shift + Right Click on an item in the top inventory)
         if (event.isShiftClick() && event.isRightClick() && event.getSlot() < 45 && event.getClickedInventory() == event.getView().getTopInventory()) {
             if (event.getCurrentItem() != null && event.getCurrentItem().getType() != Material.AIR) {
                 event.setCancelled(true);

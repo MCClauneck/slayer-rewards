@@ -9,6 +9,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
@@ -171,12 +172,30 @@ public class MobDropEditor implements Listener {
         String title = event.getView().getTitle();
         if (!title.startsWith("Edit Drop:")) return;
 
-        // 1. HARD BLOCK all interaction with the bottom row (45-53) regardless of inventory
+        // 1. Check for Shift + Right Click FIRST (Edit Chance)
+        if (event.getClick() == ClickType.SHIFT_RIGHT && event.getClickedInventory() == event.getView().getTopInventory() && event.getSlot() < 45) {
+            ItemStack clickedItem = event.getCurrentItem();
+            if (clickedItem != null && clickedItem.getType() != Material.AIR) {
+                event.setCancelled(true);
+                player.setItemOnCursor(null);
+                
+                EditorSession session = activeSessions.get(player.getUniqueId());
+                int absoluteIndex = event.getSlot() + ((session.page - 1) * 45);
+                
+                EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getView().getTopInventory());
+                pendingChanceEdit.put(player.getUniqueId(), absoluteIndex);
+                
+                player.closeInventory();
+                player.sendMessage(ChatColor.GREEN + "Enter drop chance (0-100) in chat for " + ChatColor.YELLOW + clickedItem.getType().name() + ChatColor.GREEN + ":");
+                return;
+            }
+        }
+
+        // 2. HARD BLOCK all interaction with the bottom row (45-53) regardless of inventory
         if (event.getRawSlot() >= 45 && event.getRawSlot() <= 53) {
             event.setCancelled(true);
-            player.setItemOnCursor(null); // Force cursor clear to prevent visual pick-up
+            player.setItemOnCursor(null);
             
-            // Only process logic if it's the TOP inventory
             if (event.getClickedInventory() == event.getView().getTopInventory()) {
                 EditorSession session = activeSessions.get(player.getUniqueId());
 
@@ -214,27 +233,9 @@ public class MobDropEditor implements Listener {
             return;
         }
 
-        // 2. Block shift-clicking from player's inventory to prevent items moving into control slots
+        // 3. Block shift-clicking from player's inventory to prevent items moving into control slots
         if (event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY) {
             event.setCancelled(true);
-            return;
-        }
-
-        // 3. Handle Chance Editing (Shift + Right Click on an item in the top inventory)
-        if (event.isShiftClick() && event.isRightClick() && event.getClickedInventory() == event.getView().getTopInventory() && event.getSlot() < 45) {
-            ItemStack clickedItem = event.getCurrentItem();
-            if (clickedItem != null && clickedItem.getType() != Material.AIR) {
-                event.setCancelled(true);
-                EditorSession session = activeSessions.get(player.getUniqueId());
-                int absoluteIndex = event.getSlot() + ((session.page - 1) * 45);
-                
-                // Save page before closing to ensure item exists in YAML
-                EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getView().getTopInventory());
-                
-                pendingChanceEdit.put(player.getUniqueId(), absoluteIndex);
-                player.closeInventory();
-                player.sendMessage(ChatColor.GREEN + "Enter drop chance (0-100) in chat for " + ChatColor.YELLOW + clickedItem.getType().name() + ChatColor.GREEN + ":");
-            }
         }
     }
 

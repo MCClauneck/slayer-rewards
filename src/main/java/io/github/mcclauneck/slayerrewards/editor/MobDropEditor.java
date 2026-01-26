@@ -221,15 +221,19 @@ public class MobDropEditor implements Listener {
         }
 
         // 3. Handle Chance Editing (Shift + Right Click on an item in the top inventory)
-        if (event.isShiftClick() && event.isRightClick() && event.getSlot() < 45 && event.getClickedInventory() == event.getView().getTopInventory()) {
-            if (event.getCurrentItem() != null && event.getCurrentItem().getType() != Material.AIR) {
+        if (event.isShiftClick() && event.isRightClick() && event.getClickedInventory() == event.getView().getTopInventory() && event.getSlot() < 45) {
+            ItemStack clickedItem = event.getCurrentItem();
+            if (clickedItem != null && clickedItem.getType() != Material.AIR) {
                 event.setCancelled(true);
                 EditorSession session = activeSessions.get(player.getUniqueId());
                 int absoluteIndex = event.getSlot() + ((session.page - 1) * 45);
-                pendingChanceEdit.put(player.getUniqueId(), absoluteIndex);
+                
+                // Save page before closing to ensure item exists in YAML
                 EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getView().getTopInventory());
+                
+                pendingChanceEdit.put(player.getUniqueId(), absoluteIndex);
                 player.closeInventory();
-                player.sendMessage(ChatColor.GREEN + "Enter drop chance (0-100) in chat:");
+                player.sendMessage(ChatColor.GREEN + "Enter drop chance (0-100) in chat for " + ChatColor.YELLOW + clickedItem.getType().name() + ChatColor.GREEN + ":");
             }
         }
     }
@@ -290,8 +294,9 @@ public class MobDropEditor implements Listener {
                 double chance = Double.parseDouble(event.getMessage());
                 chance = Math.max(0, Math.min(100, chance));
                 EditorUtil.updateChance(mobsFolder, session.mobName(), absoluteIndex + 1, chance);
+                player.sendMessage(ChatColor.GREEN + "Chance updated to: " + ChatColor.YELLOW + chance + "%");
             } catch (NumberFormatException e) {
-                player.sendMessage(ChatColor.RED + "Invalid number.");
+                player.sendMessage(ChatColor.RED + "Invalid number. Update cancelled.");
             }
             Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page));
         } 
@@ -304,7 +309,10 @@ public class MobDropEditor implements Listener {
             File file = new File(mobsFolder, session.mobName.toLowerCase() + ".yml");
             YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
             config.set("amount", event.getMessage());
-            try { config.save(file); } catch (Exception ignored) {}
+            try { 
+                config.save(file); 
+                player.sendMessage(ChatColor.GREEN + "Reward amount updated!");
+            } catch (Exception ignored) {}
 
             Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page));
         }

@@ -9,7 +9,6 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
-import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
@@ -173,46 +172,46 @@ public class MobDropEditor implements Listener {
         String title = event.getView().getTitle();
         if (!title.startsWith("Edit Drop:")) return;
 
-        // Block all interactions with the control row (Slots 45-53 in the top inventory)
-        if (event.getClickedInventory() == event.getView().getTopInventory() && event.getSlot() >= 45) {
-            event.setCancelled(true);
-            
-            EditorSession session = activeSessions.get(player.getUniqueId());
+        // Block interaction with the bottom row of the top inventory
+        if (event.getClickedInventory() == event.getView().getTopInventory()) {
+            if (event.getSlot() >= 45) {
+                event.setCancelled(true);
+                
+                EditorSession session = activeSessions.get(player.getUniqueId());
 
-            if (event.getSlot() == 45 && event.getCurrentItem() != null && event.getCurrentItem().getType() == Material.ARROW) {
-                isSwitchingPages.add(player.getUniqueId());
-                EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
-                openEditor(player, session.mobName, session.page - 1);
-            } 
-            else if (event.getSlot() == 53 && event.getCurrentItem() != null && event.getCurrentItem().getType() == Material.ARROW) {
-                isSwitchingPages.add(player.getUniqueId());
-                EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
-                openEditor(player, session.mobName, session.page + 1);
-            } 
-            else if (event.getSlot() == 49) {
-                EditorUtil.toggleDefaultDrops(mobsFolder, session.mobName());
-                openEditor(player, session.mobName, session.page);
+                if (event.getSlot() == 45 && event.getCurrentItem() != null && event.getCurrentItem().getType() == Material.ARROW) {
+                    isSwitchingPages.add(player.getUniqueId());
+                    EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
+                    openEditor(player, session.mobName, session.page - 1);
+                } 
+                else if (event.getSlot() == 53 && event.getCurrentItem() != null && event.getCurrentItem().getType() == Material.ARROW) {
+                    isSwitchingPages.add(player.getUniqueId());
+                    EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
+                    openEditor(player, session.mobName, session.page + 1);
+                } 
+                else if (event.getSlot() == 49) {
+                    EditorUtil.toggleDefaultDrops(mobsFolder, session.mobName());
+                    openEditor(player, session.mobName, session.page);
+                }
+                else if (event.getSlot() == 48 && session.page == 1) {
+                    cycleCurrency(session.mobName);
+                    openEditor(player, session.mobName, session.page);
+                }
+                else if (event.getSlot() == 50 && session.page == 1) {
+                    pendingMoneyEdit.add(player.getUniqueId());
+                    EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getView().getTopInventory());
+                    player.closeInventory();
+                    player.sendMessage(ChatColor.GREEN + "Enter reward amount (e.g. 10 or 10-20) in chat:");
+                }
+                return;
             }
-            else if (event.getSlot() == 48 && session.page == 1) {
-                cycleCurrency(session.mobName);
-                openEditor(player, session.mobName, session.page);
-            }
-            else if (event.getSlot() == 50 && session.page == 1) {
-                pendingMoneyEdit.add(player.getUniqueId());
-                EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getView().getTopInventory());
-                player.closeInventory();
-                player.sendMessage(ChatColor.GREEN + "Enter reward amount (e.g. 10 or 10-20) in chat:");
-            }
+        } else if (event.isShiftClick()) {
+            // Cancel shift-clicks from the bottom inventory to prevent items moving into control slots
+            event.setCancelled(true);
             return;
         }
 
-        // Block shift-clicking from player's inventory to avoid items ending up in control slots
-        if (event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY) {
-            event.setCancelled(true);
-            return;
-        }
-
-        // Handle Chance Editing (Shift + Right Click on an item)
+        // Handle Chance Editing (Shift + Right Click on an item in the top inventory)
         if (event.isShiftClick() && event.isRightClick() && event.getSlot() < 45 && event.getClickedInventory() == event.getView().getTopInventory()) {
             if (event.getCurrentItem() != null && event.getCurrentItem().getType() != Material.AIR) {
                 event.setCancelled(true);

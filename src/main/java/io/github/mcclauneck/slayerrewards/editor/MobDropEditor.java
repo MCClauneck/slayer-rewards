@@ -185,21 +185,25 @@ public class MobDropEditor implements Listener {
                 if (event.getSlot() == 45 && event.getCurrentItem() != null && event.getCurrentItem().getType() == Material.ARROW) {
                     isSwitchingPages.add(player.getUniqueId());
                     EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
+                    player.closeInventory();
                     Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page - 1));
                 } 
                 else if (event.getSlot() == 53 && event.getCurrentItem() != null && event.getCurrentItem().getType() == Material.ARROW) {
                     isSwitchingPages.add(player.getUniqueId());
                     EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
+                    player.closeInventory();
                     Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page + 1));
                 } 
                 else if (event.getSlot() == 49) {
                     EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
                     EditorUtil.toggleDefaultDrops(mobsFolder, session.mobName());
+                    player.closeInventory();
                     Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page));
                 }
                 else if (event.getSlot() == 48 && session.page == 1) {
                     EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
                     cycleCurrency(session.mobName);
+                    player.closeInventory();
                     Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page));
                 }
                 else if (event.getSlot() == 50 && session.page == 1) {

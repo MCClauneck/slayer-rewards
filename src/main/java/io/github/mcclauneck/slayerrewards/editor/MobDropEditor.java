@@ -135,21 +135,19 @@ public class MobDropEditor implements Listener {
             gui.setItem(53, EditorUtil.createButton(Material.ARROW, "Next Page"));
         }
 
-        // Currency Toggle (Slot 48) - Only on Page 1
-        if (page == 1) {
-            String currency = config.getString("currency", "coin").toLowerCase();
-            Material curMat = switch (currency) {
-                case "copper" -> Material.COPPER_BLOCK;
-                case "silver" -> Material.IRON_BLOCK;
-                case "gold" -> Material.GOLD_BLOCK;
-                default -> Material.SUNFLOWER;
-            };
-            gui.setItem(48, EditorUtil.createButton(curMat, "Currency: " + currency.toUpperCase()));
+        // Currency Toggle (Slot 48) - Now on every page
+        String currency = config.getString("currency", "coin").toLowerCase();
+        Material curMat = switch (currency) {
+            case "copper" -> Material.COPPER_BLOCK;
+            case "silver" -> Material.IRON_BLOCK;
+            case "gold" -> Material.GOLD_BLOCK;
+            default -> Material.SUNFLOWER;
+        };
+        gui.setItem(48, EditorUtil.createButton(curMat, "Currency: " + currency.toUpperCase()));
 
-            // Money Amount Editor (Slot 50)
-            String amount = config.getString("amount", "0");
-            gui.setItem(50, EditorUtil.createButton(Material.PAPER, "Reward: " + amount));
-        }
+        // Money Amount Editor (Slot 50) - Now on every page
+        String amount = config.getString("amount", "0");
+        gui.setItem(50, EditorUtil.createButton(Material.PAPER, "Reward: " + amount));
 
         // Default Drops Toggle (Slot 49)
         boolean cancelDefault = config.getBoolean("cancel_default_drops", false);
@@ -200,13 +198,13 @@ public class MobDropEditor implements Listener {
                     player.closeInventory();
                     Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page));
                 }
-                else if (event.getSlot() == 48 && session.page == 1) {
+                else if (event.getSlot() == 48) {
                     EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
                     cycleCurrency(session.mobName);
                     player.closeInventory();
                     Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page));
                 }
-                else if (event.getSlot() == 50 && session.page == 1) {
+                else if (event.getSlot() == 50) {
                     pendingMoneyEdit.add(player.getUniqueId());
                     EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getView().getTopInventory());
                     player.closeInventory();

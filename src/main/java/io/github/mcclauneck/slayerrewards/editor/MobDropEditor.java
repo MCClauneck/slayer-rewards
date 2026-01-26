@@ -9,6 +9,8 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.ClickType;
+import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
@@ -42,6 +44,8 @@ public class MobDropEditor implements Listener {
     private final Map<UUID, Integer> pendingChanceEdit = new HashMap<>();
     // Tracks players switching pages to prevent InventoryCloseEvent from killing the session
     private final Set<UUID> isSwitchingPages = new HashSet<>();
+    // Tracks players editing the money amount
+    private final Set<UUID> pendingMoneyEdit = new HashSet<>();
 
     /**
      * Constructs a new MobDropEditor.
@@ -64,8 +68,14 @@ public class MobDropEditor implements Listener {
     public void openEditor(Player player, String mobName, int page) {
         File file = new File(mobsFolder, mobName.toLowerCase() + ".yml");
         if (!file.exists()) {
-            player.sendMessage(ChatColor.RED + "Mob file not found: " + mobName);
-            return;
+            // Auto-create file if it doesn't exist
+            try {
+                file.createNewFile();
+                YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+                config.set("currency", "coin");
+                config.set("amount", "0");
+                config.save(file);
+            } catch (Exception ignored) {}
         }
 
         YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
@@ -87,17 +97,14 @@ public class MobDropEditor implements Listener {
 
         // Pagination Logic (45 items per page)
         int itemsPerPage = 45;
-        // Calculate the starting ID for this page (e.g., Page 1 starts at 1, Page 2 starts at 46)
         int startKey = (page - 1) * itemsPerPage + 1;
 
-        // Iterate through the GUI slots (0 to 44)
         for (int i = 0; i < itemsPerPage; i++) {
-            int currentKey = startKey + i; // The YAML key expected for this slot
+            int currentKey = startKey + i;
 
             if (section != null && section.contains(String.valueOf(currentKey))) {
                 ItemStack item = section.getItemStack(currentKey + ".metadata");
                 if (item != null) {
-                    // Inject Chance into Lore for visibility
                     double chance = section.getDouble(currentKey + ".chance", 100.0);
                     ItemMeta meta = item.getItemMeta();
                     List<String> lore = meta.hasLore() ? meta.getLore() : new ArrayList<>();
@@ -118,19 +125,30 @@ public class MobDropEditor implements Listener {
         gMeta.setDisplayName(" ");
         glass.setItemMeta(gMeta);
 
-        for (int i = 45; i < 54; i++) gui.setItem(i, glass); // Fill toolbar background
+        for (int i = 45; i < 54; i++) gui.setItem(i, glass);
 
-        // Previous Page Button (Slot 48)
+        // Navigation Buttons
         if (page > 1) {
-            gui.setItem(48, EditorUtil.createButton(Material.ARROW, "Previous Page"));
+            gui.setItem(45, EditorUtil.createButton(Material.ARROW, "Previous Page"));
         }
-
-        // Next Page Button (Slot 50)
-        // Show if we have items beyond this page OR if the current page is full (allows creating new items)
         boolean pageFull = (gui.getItem(44) != null);
         if (maxKey > (page * itemsPerPage) || pageFull) {
-            gui.setItem(50, EditorUtil.createButton(Material.ARROW, "Next Page"));
+            gui.setItem(53, EditorUtil.createButton(Material.ARROW, "Next Page"));
         }
+
+        // Currency Toggle (Slot 48) - Now on every page
+        String currency = config.getString("currency", "coin").toLowerCase();
+        Material curMat = switch (currency) {
+            case "copper" -> Material.COPPER_BLOCK;
+            case "silver" -> Material.IRON_BLOCK;
+            case "gold" -> Material.GOLD_BLOCK;
+            default -> Material.SUNFLOWER;
+        };
+        gui.setItem(48, EditorUtil.createButton(curMat, "Currency: " + currency.toUpperCase()));
+
+        // Money Amount Editor (Slot 50) - Now on every page
+        String amount = config.getString("amount", "0");
+        gui.setItem(50, EditorUtil.createButton(Material.PAPER, "Reward: " + amount));
 
         // Default Drops Toggle (Slot 49)
         boolean cancelDefault = config.getBoolean("cancel_default_drops", false);
@@ -154,53 +172,85 @@ public class MobDropEditor implements Listener {
         String title = event.getView().getTitle();
         if (!title.startsWith("Edit Drop:")) return;
 
-        EditorSession session = activeSessions.get(player.getUniqueId());
+        // 1. Check for Shift + Right Click FIRST (Edit Chance)
+        if (event.getClick() == ClickType.SHIFT_RIGHT && event.getClickedInventory() == event.getView().getTopInventory() && event.getSlot() < 45) {
+            ItemStack clickedItem = event.getCurrentItem();
+            if (clickedItem != null && clickedItem.getType() != Material.AIR) {
+                event.setCancelled(true);
+                player.setItemOnCursor(null);
+                
+                EditorSession session = activeSessions.get(player.getUniqueId());
+                int absoluteIndex = event.getSlot() + ((session.page - 1) * 45);
+                
+                EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getView().getTopInventory());
+                pendingChanceEdit.put(player.getUniqueId(), absoluteIndex);
+                
+                player.closeInventory();
+                player.sendMessage(ChatColor.GREEN + "Enter drop chance (0-100) in chat for " + ChatColor.YELLOW + clickedItem.getType().name() + ChatColor.GREEN + ":");
+                return;
+            }
+        }
 
-        // Handle Toolbar Clicks (Bottom Row)
-        if (event.getClickedInventory() == event.getView().getTopInventory() && event.getSlot() >= 45) {
+        // 2. HARD BLOCK all interaction with the bottom row (45-53) regardless of inventory
+        if (event.getRawSlot() >= 45 && event.getRawSlot() <= 53) {
             event.setCancelled(true);
+            player.setItemOnCursor(null);
+            
+            if (event.getClickedInventory() == event.getView().getTopInventory()) {
+                EditorSession session = activeSessions.get(player.getUniqueId());
 
-            if (event.getSlot() == 48 && event.getCurrentItem().getType() == Material.ARROW) {
-                // Page Switch Logic
-                isSwitchingPages.add(player.getUniqueId()); // Prevent session kill
-                EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
-                openEditor(player, session.mobName, session.page - 1);
-            } 
-            else if (event.getSlot() == 50 && event.getCurrentItem().getType() == Material.ARROW) {
-                // Page Switch Logic
-                isSwitchingPages.add(player.getUniqueId()); // Prevent session kill
-                EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
-                openEditor(player, session.mobName, session.page + 1);
-            } 
-            else if (event.getSlot() == 49) {
-                EditorUtil.toggleDefaultDrops(mobsFolder, session.mobName());
-
-                File file = new File(mobsFolder, session.mobName.toLowerCase() + ".yml");
-                YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
-                boolean cancelDefault = config.getBoolean("cancel_default_drops", false);
-
-                event.getClickedInventory().setItem(49, EditorUtil.createButton(cancelDefault ? Material.RED_WOOL : Material.LIME_WOOL,
-                        cancelDefault ? "Default Drops: OFF" : "Default Drops: ON"));
+                if (event.getSlot() == 45 && event.getCurrentItem() != null && event.getCurrentItem().getType() == Material.ARROW) {
+                    isSwitchingPages.add(player.getUniqueId());
+                    EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
+                    player.closeInventory();
+                    Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page - 1));
+                } 
+                else if (event.getSlot() == 53 && event.getCurrentItem() != null && event.getCurrentItem().getType() == Material.ARROW) {
+                    isSwitchingPages.add(player.getUniqueId());
+                    EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
+                    player.closeInventory();
+                    Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page + 1));
+                } 
+                else if (event.getSlot() == 49) {
+                    EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
+                    EditorUtil.toggleDefaultDrops(mobsFolder, session.mobName());
+                    player.closeInventory();
+                    Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page));
+                }
+                else if (event.getSlot() == 48) {
+                    EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
+                    cycleCurrency(session.mobName);
+                    player.closeInventory();
+                    Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page));
+                }
+                else if (event.getSlot() == 50) {
+                    pendingMoneyEdit.add(player.getUniqueId());
+                    EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getView().getTopInventory());
+                    player.closeInventory();
+                    player.sendMessage(ChatColor.GREEN + "Enter reward amount (e.g. 10 or 10-20) in chat:");
+                }
             }
             return;
         }
 
-        // Handle Chance Editing (Shift + Right Click on an item)
-        if (event.isShiftClick() && event.isRightClick() && event.getSlot() < 45 && event.getClickedInventory() == event.getView().getTopInventory()) {
-            if (event.getCurrentItem() != null && event.getCurrentItem().getType() != Material.AIR) {
-                event.setCancelled(true);
-
-                // Calculate absolute index (Page Offset + Slot)
-                int absoluteIndex = event.getSlot() + ((session.page - 1) * 45);
-                pendingChanceEdit.put(player.getUniqueId(), absoluteIndex);
-
-                // Save page state before closing so the item exists in YAML
-                EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getView().getTopInventory());
-
-                player.closeInventory();
-                player.sendMessage(ChatColor.GREEN + "Enter drop chance (0-100) in chat:");
-            }
+        // 3. Block shift-clicking from player's inventory to prevent items moving into control slots
+        if (event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY) {
+            event.setCancelled(true);
         }
+    }
+
+    private void cycleCurrency(String mobName) {
+        File file = new File(mobsFolder, mobName.toLowerCase() + ".yml");
+        YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+        String current = config.getString("currency", "coin").toLowerCase();
+        String next = switch (current) {
+            case "coin" -> "copper";
+            case "copper" -> "silver";
+            case "silver" -> "gold";
+            default -> "coin";
+        };
+        config.set("currency", next);
+        try { config.save(file); } catch (Exception ignored) {}
     }
 
     /**
@@ -211,15 +261,13 @@ public class MobDropEditor implements Listener {
     @EventHandler
     public void onInventoryClose(InventoryCloseEvent event) {
         if (event.getPlayer() instanceof Player player) {
-            // If switching pages, ignore this close event (do not remove session)
             if (isSwitchingPages.contains(player.getUniqueId())) {
                 isSwitchingPages.remove(player.getUniqueId());
                 return;
             }
 
             if (activeSessions.containsKey(player.getUniqueId())) {
-                // Check if we are closing to edit chat; if so, don't remove session/save yet
-                if (!pendingChanceEdit.containsKey(player.getUniqueId())) {
+                if (!pendingChanceEdit.containsKey(player.getUniqueId()) && !pendingMoneyEdit.contains(player.getUniqueId())) {
                     EditorSession session = activeSessions.remove(player.getUniqueId());
                     EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
                     player.sendMessage(ChatColor.GREEN + "Mob drops saved!");
@@ -229,34 +277,45 @@ public class MobDropEditor implements Listener {
     }
 
     /**
-     * Captures chat input for setting drop chances.
+     * Captures chat input for setting drop chances or money amounts.
      *
      * @param event The chat event.
      */
     @EventHandler
     public void onChat(AsyncPlayerChatEvent event) {
-        if (pendingChanceEdit.containsKey(event.getPlayer().getUniqueId())) {
+        UUID uuid = event.getPlayer().getUniqueId();
+        
+        if (pendingChanceEdit.containsKey(uuid)) {
             event.setCancelled(true);
             Player player = event.getPlayer();
-            int absoluteIndex = pendingChanceEdit.remove(player.getUniqueId());
+            int absoluteIndex = pendingChanceEdit.remove(uuid);
+            EditorSession session = activeSessions.get(uuid);
 
             try {
                 double chance = Double.parseDouble(event.getMessage());
-                if (chance < 0) chance = 0;
-                if (chance > 100) chance = 100;
-
-                // Save chance to file directly
-                EditorSession session = activeSessions.get(player.getUniqueId());
-                EditorUtil.updateChance(mobsFolder, session.mobName(), absoluteIndex + 1, chance); // +1 because YAML keys start at 1
-
-                // Re-open editor
-                Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page));
-
+                chance = Math.max(0, Math.min(100, chance));
+                EditorUtil.updateChance(mobsFolder, session.mobName(), absoluteIndex + 1, chance);
+                player.sendMessage(ChatColor.GREEN + "Chance updated to: " + ChatColor.YELLOW + chance + "%");
             } catch (NumberFormatException e) {
-                player.sendMessage(ChatColor.RED + "Invalid number. Edit cancelled.");
-                EditorSession session = activeSessions.get(player.getUniqueId());
-                Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page));
+                player.sendMessage(ChatColor.RED + "Invalid number. Update cancelled.");
             }
+            Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page));
+        } 
+        else if (pendingMoneyEdit.contains(uuid)) {
+            event.setCancelled(true);
+            pendingMoneyEdit.remove(uuid);
+            Player player = event.getPlayer();
+            EditorSession session = activeSessions.get(uuid);
+
+            File file = new File(mobsFolder, session.mobName.toLowerCase() + ".yml");
+            YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
+            config.set("amount", event.getMessage());
+            try { 
+                config.save(file); 
+                player.sendMessage(ChatColor.GREEN + "Reward amount updated!");
+            } catch (Exception ignored) {}
+
+            Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page));
         }
     }
 

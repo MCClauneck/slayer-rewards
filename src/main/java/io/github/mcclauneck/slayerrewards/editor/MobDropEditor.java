@@ -9,6 +9,7 @@ import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.AsyncPlayerChatEvent;
@@ -172,17 +173,18 @@ public class MobDropEditor implements Listener {
         String title = event.getView().getTitle();
         if (!title.startsWith("Edit Drop:")) return;
 
-        EditorSession session = activeSessions.get(player.getUniqueId());
-
-        if (event.getClickedInventory() == event.getView().getTopInventory() && event.getSlot() >= 45) {
+        // Block all interactions with the control row (Slots 45-53)
+        if (event.getRawSlot() >= 45 && event.getRawSlot() <= 53) {
             event.setCancelled(true);
+            
+            EditorSession session = activeSessions.get(player.getUniqueId());
 
-            if (event.getSlot() == 45 && event.getCurrentItem().getType() == Material.ARROW) {
+            if (event.getSlot() == 45 && event.getCurrentItem() != null && event.getCurrentItem().getType() == Material.ARROW) {
                 isSwitchingPages.add(player.getUniqueId());
                 EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
                 openEditor(player, session.mobName, session.page - 1);
             } 
-            else if (event.getSlot() == 53 && event.getCurrentItem().getType() == Material.ARROW) {
+            else if (event.getSlot() == 53 && event.getCurrentItem() != null && event.getCurrentItem().getType() == Material.ARROW) {
                 isSwitchingPages.add(player.getUniqueId());
                 EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
                 openEditor(player, session.mobName, session.page + 1);
@@ -204,9 +206,17 @@ public class MobDropEditor implements Listener {
             return;
         }
 
+        // Block Shift-Clicks from the player's inventory that might land in the control row
+        if (event.getAction() == InventoryAction.MOVE_TO_OTHER_INVENTORY && event.getClickedInventory() == event.getView().getBottomInventory()) {
+             event.setCancelled(true);
+             return;
+        }
+
+        // Handle Chance Editing (Shift + Right Click on an item)
         if (event.isShiftClick() && event.isRightClick() && event.getSlot() < 45 && event.getClickedInventory() == event.getView().getTopInventory()) {
             if (event.getCurrentItem() != null && event.getCurrentItem().getType() != Material.AIR) {
                 event.setCancelled(true);
+                EditorSession session = activeSessions.get(player.getUniqueId());
                 int absoluteIndex = event.getSlot() + ((session.page - 1) * 45);
                 pendingChanceEdit.put(player.getUniqueId(), absoluteIndex);
                 EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getView().getTopInventory());

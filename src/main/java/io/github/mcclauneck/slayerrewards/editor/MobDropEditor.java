@@ -159,6 +159,9 @@ public class MobDropEditor implements Listener {
         String toggleB64 = cancelDefault ? "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZWFmMjU4ZGI3MjEzMGJmZDk3ZDIxOGM4OTRiYTA4MTQ5NmQyNGQ4NTZkYzYwNDFkMTk2MDZmZmZiNGFiZjJhYyJ9fX0=" : "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNzBkOTY5Y2Q4YzhiMjkxNmIyNmExOTcyNTNlM2FkZmU5ODUzNzIwNDk0ZjIyYmUxOWEwODNiZjE4NGY5YzJiYyJ9fX0=";
         gui.setItem(49, EditorUtil.createSkullButton(toggleB64, cancelDefault ? "Default Drops: OFF" : "Default Drops: ON"));
 
+        // Save & Reload (Slot 52)
+        gui.setItem(52, EditorUtil.createSkullButton("eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMTc0MjgxZjk2NjlmMmNkY2Y3ODQ4NDQ4YTViYjYyODIzMmVlYTJiZmJkZmM3ZDRmMjBiZGE1MDMzZDAzMzY2YSJ9fX0=", "Save & Reload"));
+
         activeSessions.put(player.getUniqueId(), new EditorSession(mobName, page));
         player.openInventory(gui);
     }
@@ -238,11 +241,15 @@ public class MobDropEditor implements Listener {
                     player.sendMessage(ChatColor.GREEN + "Enter reward amount (e.g. 10 or 10-20) in chat:");
                     requiresChatInput = true;
                 }
+                case 52 -> { // Save & Reload
+                    EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
+                    shouldSaveAndReopen = true;
+                }
             }
 
             if (shouldSaveAndReopen && !requiresChatInput) {
                 if (targetPage != session.page) isSwitchingPages.add(player.getUniqueId());
-                // For cases 48/49, we saved inside the case, but redundancy here is safe or can be optimized out.
+                // For cases 48/49/52, we saved inside the case, but redundancy here is safe or can be optimized out.
                 // To be strictly safe and robust:
                 if (event.getSlot() == 45 || event.getSlot() == 53) {
                     EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());

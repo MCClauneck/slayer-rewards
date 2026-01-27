@@ -103,20 +103,20 @@ public class MobDropEditor implements Listener {
         for (int i = 0; i < itemsPerPage; i++) {
             int currentKey = startKey + i;
 
-            if (section != null && section.contains(String.valueOf(currentKey))) {
-                ItemStack item = section.getItemStack(currentKey + ".metadata");
-                if (item != null) {
-                    double chance = section.getDouble(currentKey + ".chance", 100.0);
-                    ItemMeta meta = item.getItemMeta();
-                    List<String> lore = meta.hasLore() ? meta.getLore() : new ArrayList<>();
-                    lore.add(ChatColor.YELLOW + "----------------");
-                    lore.add(ChatColor.GOLD + "Chance: " + chance + "%");
-                    lore.add(ChatColor.GRAY + "Shift+Right Click to edit chance");
-                    meta.setLore(lore);
-                    item.setItemMeta(meta);
+            // Optimization: checking section != null once and using getItemStack directly avoids redundant lookups
+            ItemStack item = (section != null) ? section.getItemStack(currentKey + ".metadata") : null;
+            
+            if (item != null) {
+                double chance = section.getDouble(currentKey + ".chance", 100.0);
+                ItemMeta meta = item.getItemMeta();
+                List<String> lore = meta.hasLore() ? meta.getLore() : new ArrayList<>();
+                lore.add(ChatColor.YELLOW + "----------------");
+                lore.add(ChatColor.GOLD + "Chance: " + chance + "%");
+                lore.add(ChatColor.GRAY + "Shift+Right Click to edit chance");
+                meta.setLore(lore);
+                item.setItemMeta(meta);
 
-                    gui.setItem(i, item);
-                }
+                gui.setItem(i, item);
             }
         }
 
@@ -130,35 +130,37 @@ public class MobDropEditor implements Listener {
 
         // Navigation Buttons
         if (page > 1) {
-            gui.setItem(45, EditorUtil.createButton(Material.ARROW, "Previous Page"));
+            gui.setItem(45, EditorUtil.createSkullButton("eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZGNlYzgwN2RjYzE0MzYzMzRmZDRkYzlhYjM0OTM0MmY2YzUyYzllN2IyYmYzNDY3MTJkYjcyYTBkNmQ3YTQifX19", "Previous Page"));
         }
         boolean pageFull = (gui.getItem(44) != null);
         if (maxKey > (page * itemsPerPage) || pageFull) {
-            gui.setItem(53, EditorUtil.createButton(Material.ARROW, "Next Page"));
+            gui.setItem(53, EditorUtil.createSkullButton("eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZTAxYzdiNTcyNjE3ODk3NGIzYjNhMDFiNDJhNTkwZTU0MzY2MDI2ZmQ0MzgwOGYyYTc4NzY0ODg0M2E3ZjVhIn19fQ==", "Next Page"));
         }
 
-        // Currency Toggle (Slot 48) - Now on every page
+        // Currency Toggle (Slot 48) - Now using custom skulls
         String currencyStr = config.getString("currency", "coin");
         CurrencyType currency = CurrencyType.fromName(currencyStr);
         if (currency == null) currency = CurrencyType.COIN;
 
-        // Updated: Map Enum to Material
-        Material curMat = switch (currency) {
-            case COPPER -> Material.COPPER_BLOCK;
-            case SILVER -> Material.IRON_BLOCK;
-            case GOLD -> Material.GOLD_BLOCK;
-            default -> Material.SUNFLOWER; // COIN
+        String curB64 = switch (currency) {
+            case COPPER -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZDJlZWM1YzVkNTAzMDJmZjEwZDBiZGI2MmQ3OWU2N2EwYWIxMTAxNjk2YWUyN2VmOWQ4MmIzNzk0M2MyYTY1YyJ9fX0=";
+            case SILVER -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYTM0YjI3YmZjYzhmOWI5NjQ1OTRiNjE4YjExNDZhZjY5ZGUyNzhjZTVlMmUzMDEyY2I0NzFhOWEzY2YzODcxIn19fQ==";
+            case GOLD -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYjBhN2I5NGM0ZTU4MWI2OTkxNTlkNDg4NDZlYzA5MTM5MjUwNjIzN2M4OWE5N2M5MzI0OGEwZDhhYmM5MTZkNSJ9fX0=";
+            default -> "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvYWFmMGQ4ZDc5NGEzYTRhNWUyMGE1MjkyZWQyNTUxMzRmNzZkNGYzYTU1NTZmYzdmNDI2ZDI3YjI0NzQ3NGQ2NyJ9fX0=";
         };
-        gui.setItem(48, EditorUtil.createButton(curMat, "Currency: " + currency.getName().toUpperCase()));
+        gui.setItem(48, EditorUtil.createSkullButton(curB64, "Currency: " + currency.getName().toUpperCase()));
 
-        // Money Amount Editor (Slot 50) - Now on every page
+        // Money Amount Editor (Slot 50)
         String amount = config.getString("amount", "0");
         gui.setItem(50, EditorUtil.createButton(Material.PAPER, "Reward: " + amount));
 
         // Default Drops Toggle (Slot 49)
         boolean cancelDefault = config.getBoolean("cancel_default_drops", false);
-        gui.setItem(49, EditorUtil.createButton(cancelDefault ? Material.RED_WOOL : Material.LIME_WOOL,
-                cancelDefault ? "Default Drops: OFF" : "Default Drops: ON"));
+        String toggleB64 = cancelDefault ? "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvZWFmMjU4ZGI3MjEzMGJmZDk3ZDIxOGM4OTRiYTA4MTQ5NmQyNGQ4NTZkYzYwNDFkMTk2MDZmZmZiNGFiZjJhYyJ9fX0=" : "eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvNzBkOTY5Y2Q4YzhiMjkxNmIyNmExOTcyNTNlM2FkZmU5ODUzNzIwNDk0ZjIyYmUxOWEwODNiZjE4NGY5YzJiYyJ9fX0=";
+        gui.setItem(49, EditorUtil.createSkullButton(toggleB64, cancelDefault ? "Default Drops: OFF" : "Default Drops: ON"));
+
+        // Save & Reload (Slot 52)
+        gui.setItem(52, EditorUtil.createSkullButton("eyJ0ZXh0dXJlcyI6eyJTS0lOIjp7InVybCI6Imh0dHA6Ly90ZXh0dXJlcy5taW5lY3JhZnQubmV0L3RleHR1cmUvMTc0MjgxZjk2NjlmMmNkY2Y3ODQ4NDQ4YTViYjYyODIzMmVlYTJiZmJkZmM3ZDRmMjBiZGE1MDMzZDAzMzY2YSJ9fX0=", "Save & Reload"));
 
         activeSessions.put(player.getUniqueId(), new EditorSession(mobName, page));
         player.openInventory(gui);
@@ -177,6 +179,8 @@ public class MobDropEditor implements Listener {
         String title = event.getView().getTitle();
         if (!title.startsWith("Edit Drop:")) return;
 
+        EditorSession session = activeSessions.get(player.getUniqueId());
+
         // 1. Check for Shift + Right Click FIRST (Edit Chance)
         if (event.getClick() == ClickType.SHIFT_RIGHT && event.getClickedInventory() == event.getView().getTopInventory() && event.getSlot() < 45) {
             ItemStack clickedItem = event.getCurrentItem();
@@ -184,7 +188,6 @@ public class MobDropEditor implements Listener {
                 event.setCancelled(true);
                 player.setItemOnCursor(null);
                 
-                EditorSession session = activeSessions.get(player.getUniqueId());
                 int absoluteIndex = event.getSlot() + ((session.page - 1) * 45);
                 
                 EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getView().getTopInventory());
@@ -201,39 +204,60 @@ public class MobDropEditor implements Listener {
             event.setCancelled(true);
             player.setItemOnCursor(null);
             
-            if (event.getClickedInventory() == event.getView().getTopInventory()) {
-                EditorSession session = activeSessions.get(player.getUniqueId());
+            if (event.getClickedInventory() != event.getView().getTopInventory()) return;
 
-                if (event.getSlot() == 45 && event.getCurrentItem() != null && event.getCurrentItem().getType() == Material.ARROW) {
-                    isSwitchingPages.add(player.getUniqueId());
-                    EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
-                    player.closeInventory();
-                    Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page - 1));
-                } 
-                else if (event.getSlot() == 53 && event.getCurrentItem() != null && event.getCurrentItem().getType() == Material.ARROW) {
-                    isSwitchingPages.add(player.getUniqueId());
-                    EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
-                    player.closeInventory();
-                    Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page + 1));
-                } 
-                else if (event.getSlot() == 49) {
+            // Optimization: Switch logic to reduce repetitive save/runTask calls
+            int targetPage = session.page;
+            boolean shouldSaveAndReopen = false;
+            boolean requiresChatInput = false;
+
+            switch (event.getSlot()) {
+                case 45 -> { // Prev Page
+                    if (event.getCurrentItem() != null && event.getCurrentItem().getType() == Material.PLAYER_HEAD) {
+                        targetPage = session.page - 1;
+                        shouldSaveAndReopen = true;
+                    }
+                }
+                case 53 -> { // Next Page
+                    if (event.getCurrentItem() != null && event.getCurrentItem().getType() == Material.PLAYER_HEAD) {
+                        targetPage = session.page + 1;
+                        shouldSaveAndReopen = true;
+                    }
+                }
+                case 49 -> { // Toggle Defaults
                     EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
                     EditorUtil.toggleDefaultDrops(mobsFolder, session.mobName());
-                    player.closeInventory();
-                    Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page));
+                    shouldSaveAndReopen = true; // Already saved, but logic flow requires reopening
                 }
-                else if (event.getSlot() == 48) {
+                case 48 -> { // Cycle Currency
                     EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
                     cycleCurrency(session.mobName);
-                    player.closeInventory();
-                    Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page));
+                    shouldSaveAndReopen = true;
                 }
-                else if (event.getSlot() == 50) {
+                case 50 -> { // Edit Reward
                     pendingMoneyEdit.add(player.getUniqueId());
                     EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getView().getTopInventory());
                     player.closeInventory();
                     player.sendMessage(ChatColor.GREEN + "Enter reward amount (e.g. 10 or 10-20) in chat:");
+                    requiresChatInput = true;
                 }
+                case 52 -> { // Save & Reload
+                    EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
+                    shouldSaveAndReopen = true;
+                }
+            }
+
+            if (shouldSaveAndReopen && !requiresChatInput) {
+                if (targetPage != session.page) isSwitchingPages.add(player.getUniqueId());
+                // For cases 48/49/52, we saved inside the case, but redundancy here is safe or can be optimized out.
+                // To be strictly safe and robust:
+                if (event.getSlot() == 45 || event.getSlot() == 53) {
+                    EditorUtil.savePage(mobsFolder, session.mobName(), session.page(), event.getInventory());
+                }
+                
+                player.closeInventory();
+                int finalTargetPage = targetPage;
+                Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, finalTargetPage));
             }
             return;
         }
@@ -252,12 +276,10 @@ public class MobDropEditor implements Listener {
         CurrencyType current = CurrencyType.fromName(currentStr);
         if (current == null) current = CurrencyType.COIN;
         
-        // Updated: Cycle using Enum values to be dynamic and safe
         CurrencyType[] values = CurrencyType.values();
         int nextIndex = (current.ordinal() + 1) % values.length;
-        CurrencyType next = values[nextIndex];
         
-        config.set("currency", next.getName());
+        config.set("currency", values[nextIndex].getName());
         try { config.save(file); } catch (Exception ignored) {}
     }
 
@@ -293,12 +315,16 @@ public class MobDropEditor implements Listener {
     public void onChat(AsyncPlayerChatEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
         
-        if (pendingChanceEdit.containsKey(uuid)) {
-            event.setCancelled(true);
-            Player player = event.getPlayer();
-            int absoluteIndex = pendingChanceEdit.remove(uuid);
-            EditorSession session = activeSessions.get(uuid);
+        if (!pendingChanceEdit.containsKey(uuid) && !pendingMoneyEdit.contains(uuid)) return;
 
+        event.setCancelled(true);
+        Player player = event.getPlayer();
+        EditorSession session = activeSessions.get(uuid);
+
+        if (session == null) return; // Safety check
+
+        if (pendingChanceEdit.containsKey(uuid)) {
+            int absoluteIndex = pendingChanceEdit.remove(uuid);
             try {
                 double chance = Double.parseDouble(event.getMessage());
                 chance = Math.max(0, Math.min(100, chance));
@@ -307,14 +333,8 @@ public class MobDropEditor implements Listener {
             } catch (NumberFormatException e) {
                 player.sendMessage(ChatColor.RED + "Invalid number. Update cancelled.");
             }
-            Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page));
-        } 
-        else if (pendingMoneyEdit.contains(uuid)) {
-            event.setCancelled(true);
+        } else if (pendingMoneyEdit.contains(uuid)) {
             pendingMoneyEdit.remove(uuid);
-            Player player = event.getPlayer();
-            EditorSession session = activeSessions.get(uuid);
-
             File file = new File(mobsFolder, session.mobName.toLowerCase() + ".yml");
             YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
             config.set("amount", event.getMessage());
@@ -322,9 +342,9 @@ public class MobDropEditor implements Listener {
                 config.save(file); 
                 player.sendMessage(ChatColor.GREEN + "Reward amount updated!");
             } catch (Exception ignored) {}
-
-            Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page));
         }
+
+        Bukkit.getScheduler().runTask(plugin, () -> openEditor(player, session.mobName, session.page));
     }
 
     /**

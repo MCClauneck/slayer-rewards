@@ -1,15 +1,23 @@
 package io.github.mcclauneck.slayerrewards.editor.util;
 
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
+import org.bukkit.profile.PlayerProfile;
+import org.bukkit.profile.PlayerTextures;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.Base64;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Utility class for MobDropEditor operations.
@@ -41,11 +49,44 @@ public class EditorUtil {
     }
 
     /**
+     * Creates a player head button with a custom Base64 texture.
+     *
+     * @param b64  The Base64 texture string.
+     * @param name The display name of the button.
+     * @return The constructed ItemStack.
+     */
+    public static ItemStack createSkullButton(String b64, String name) {
+        ItemStack item = new ItemStack(Material.PLAYER_HEAD);
+        SkullMeta meta = (SkullMeta) item.getItemMeta();
+        if (meta == null) return item;
+
+        // Use native Bukkit PlayerProfile API (No AuthLib needed)
+        PlayerProfile profile = Bukkit.createPlayerProfile(UUID.randomUUID());
+        PlayerTextures textures = profile.getTextures();
+
+        try {
+            // Decode Base64 to get the URL inside the JSON
+            String decoded = new String(Base64.getDecoder().decode(b64));
+            // Simple extraction of the URL from the skin JSON
+            String urlString = decoded.substring(decoded.indexOf("http"), decoded.lastIndexOf("\""));
+            textures.setSkin(new URL(urlString));
+            profile.setTextures(textures);
+        } catch (MalformedURLException | IllegalArgumentException e) {
+            e.printStackTrace();
+        }
+
+        meta.setOwnerProfile(profile);
+        meta.setDisplayName(ChatColor.WHITE + name);
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    /**
      * Saves the items in the current page to the YAML file.
      *
      * @param mobsFolder The directory containing mob files.
      * @param mobName    The name of the mob.
-     * @param page       The current page number.
+     * @param page        The current page number.
      * @param inv        The inventory being saved.
      */
     public static void savePage(File mobsFolder, String mobName, int page, Inventory inv) {

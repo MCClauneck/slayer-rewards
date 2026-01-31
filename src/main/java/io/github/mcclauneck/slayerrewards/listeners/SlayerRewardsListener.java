@@ -11,6 +11,8 @@ import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.inventory.ItemStack;
 
 import java.io.File;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadLocalRandom;
 
@@ -21,6 +23,8 @@ public class SlayerRewardsListener implements Listener {
 
     private final Executor executor;
     private final SlayerRewardsProvider provider;
+    // Cache map to store configurations and reduce disk I/O
+    private final Map<String, CachedConfig> configCache = new HashMap<>();
 
     /**
      * Creates a new listener instance.
@@ -72,7 +76,17 @@ public class SlayerRewardsListener implements Listener {
         File mobFile = new File(provider.getMobsFolder(), mobType.toLowerCase() + ".yml");
         if (!mobFile.exists()) return;
 
-        YamlConfiguration config = YamlConfiguration.loadConfiguration(mobFile);
+        // Caching Logic: Check last modified time to prevent unnecessary disk reads
+        long currentLastModified = mobFile.lastModified();
+        CachedConfig cached = configCache.get(mobType);
+
+        YamlConfiguration config;
+        if (cached != null && cached.lastModified() == currentLastModified) {
+            config = cached.config();
+        } else {
+            config = YamlConfiguration.loadConfiguration(mobFile);
+            configCache.put(mobType, new CachedConfig(currentLastModified, config));
+        }
 
         // Check if we should cancel vanilla drops
         if (config.getBoolean("cancel_default_drops", false)) {
@@ -96,4 +110,9 @@ public class SlayerRewardsListener implements Listener {
             }
         }
     }
+
+    /**
+     * Record to hold cached configuration data.
+     */
+    private record CachedConfig(long lastModified, YamlConfiguration config) {}
 }

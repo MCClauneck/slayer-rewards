@@ -17,7 +17,7 @@ import org.bukkit.profile.PlayerTextures;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.List;
@@ -65,7 +65,6 @@ public class EditorUtil {
         if (meta == null) return item;
 
         // Use modern Paper API to avoid PlayerProfile deprecation warnings
-        // Bukkit.createProfile returns the com.destroystokyo...PlayerProfile
         PlayerProfile profile = Bukkit.createProfile(UUID.randomUUID(), "");
         PlayerTextures textures = profile.getTextures();
 
@@ -74,7 +73,9 @@ public class EditorUtil {
             String decoded = new String(Base64.getDecoder().decode(b64));
             // Simple extraction of the URL from the skin JSON
             String urlString = decoded.substring(decoded.indexOf("http"), decoded.lastIndexOf("\""));
-            textures.setSkin(new URL(urlString));
+            
+            // Replace deprecated new URL(string) with URI.create(string).toURL()
+            textures.setSkin(URI.create(urlString).toURL());
             profile.setTextures(textures);
         } catch (MalformedURLException | IllegalArgumentException e) {
             e.printStackTrace();

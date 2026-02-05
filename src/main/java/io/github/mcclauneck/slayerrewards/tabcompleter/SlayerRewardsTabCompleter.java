@@ -22,7 +22,6 @@ import java.util.stream.Collectors;
  */
 public class SlayerRewardsTabCompleter implements TabCompleter {
 
-    private final SlayerRewardsProvider provider;
     private final List<String> allEntityTypes;
 
     /**
@@ -31,7 +30,6 @@ public class SlayerRewardsTabCompleter implements TabCompleter {
      * @param provider The provider instance used to access the mobs folder.
      */
     public SlayerRewardsTabCompleter(SlayerRewardsProvider provider) {
-        this.provider = provider;
         this.allEntityTypes = Arrays.stream(EntityType.values())
                 .filter(EntityType::isAlive)
                 .map(type -> type.name().toLowerCase())

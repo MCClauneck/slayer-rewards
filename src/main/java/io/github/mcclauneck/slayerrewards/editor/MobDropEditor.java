@@ -2,8 +2,10 @@ package io.github.mcclauneck.slayerrewards.editor;
 
 import io.github.mcclauneck.slayerrewards.editor.util.EditorUtil;
 import io.github.mcengine.mceconomy.api.enums.CurrencyType;
+import io.papermc.paper.event.player.AsyncChatEvent;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
@@ -15,7 +17,6 @@ import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryAction;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryCloseEvent;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -82,12 +83,9 @@ public class MobDropEditor implements Listener {
 
         YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
         
-        // Translatable Title: Edit Drop: %s | P%s
-        Component title = Component.translatable("mcclauneck.slayerrewards.editor.title", 
+        Inventory gui = Bukkit.createInventory(null, 54, Component.translatable("mcclauneck.slayerrewards.editor.title", 
             Component.text(mobName), 
-            Component.text(page));
-
-        Inventory gui = Bukkit.createInventory(null, 54, title);
+            Component.text(page)));
 
         // Load Items
         ConfigurationSection section = config.getConfigurationSection("item_drop");
@@ -205,16 +203,13 @@ public class MobDropEditor implements Listener {
         if (!(event.getWhoClicked() instanceof Player player)) return;
         if (!activeSessions.containsKey(player.getUniqueId())) return;
 
-        String title = event.getView().getTitle();
-        // Since we are using Components for title, getting view title as string might be inconsistent.
-        // It's safer to rely on the active session existence, but let's check view type/holder if needed.
-        // For now, strict check on ActiveSession + Top Inventory is reasonable.
+        // Verify it's an editor session before proceeding (Title check removal optimizes unused var issue)
+        EditorSession session = activeSessions.get(player.getUniqueId());
+
         if (event.getView().getTopInventory() != event.getClickedInventory() 
             && event.getClickedInventory() != event.getView().getBottomInventory()) {
              // Clicked outside or irrelevant
         }
-        
-        EditorSession session = activeSessions.get(player.getUniqueId());
 
         // 1. Check for Shift + Right Click FIRST (Edit Chance)
         if (event.getClick() == ClickType.SHIFT_RIGHT && event.getClickedInventory() == event.getView().getTopInventory() && event.getSlot() < 45) {
@@ -344,11 +339,14 @@ public class MobDropEditor implements Listener {
 
     /**
      * Captures chat input for setting drop chances or money amounts.
+     * <p>
+     * Replaces the deprecated AsyncPlayerChatEvent with AsyncChatEvent (Paper API).
+     * </p>
      *
      * @param event The chat event.
      */
     @EventHandler
-    public void onChat(AsyncPlayerChatEvent event) {
+    public void onChat(AsyncChatEvent event) {
         UUID uuid = event.getPlayer().getUniqueId();
         
         if (!pendingChanceEdit.containsKey(uuid) && !pendingMoneyEdit.contains(uuid)) return;
@@ -359,10 +357,13 @@ public class MobDropEditor implements Listener {
 
         if (session == null) return; // Safety check
 
+        // Convert Component message to plain text for parsing numbers
+        String message = PlainTextComponentSerializer.plainText().serialize(event.message());
+
         if (pendingChanceEdit.containsKey(uuid)) {
             int absoluteIndex = pendingChanceEdit.remove(uuid);
             try {
-                double chance = Double.parseDouble(event.getMessage());
+                double chance = Double.parseDouble(message);
                 chance = Math.max(0, Math.min(100, chance));
                 EditorUtil.updateChance(mobsFolder, session.mobName(), absoluteIndex + 1, chance);
                 player.sendMessage(Component.translatable("mcclauneck.slayerrewards.editor.chat.updated_chance", NamedTextColor.GREEN, 
@@ -374,7 +375,7 @@ public class MobDropEditor implements Listener {
             pendingMoneyEdit.remove(uuid);
             File file = new File(mobsFolder, session.mobName.toLowerCase() + ".yml");
             YamlConfiguration config = YamlConfiguration.loadConfiguration(file);
-            config.set("amount", event.getMessage());
+            config.set("amount", message);
             try { 
                 config.save(file); 
                 player.sendMessage(Component.translatable("mcclauneck.slayerrewards.editor.chat.updated_reward", NamedTextColor.GREEN));

@@ -1,7 +1,6 @@
 package io.github.mcclauneck.slayerrewards.editor.util;
 
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.TranslatableComponent;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
@@ -65,8 +64,9 @@ public class EditorUtil {
         SkullMeta meta = (SkullMeta) item.getItemMeta();
         if (meta == null) return item;
 
-        // Use native Bukkit PlayerProfile API (No AuthLib needed)
-        PlayerProfile profile = Bukkit.createPlayerProfile(UUID.randomUUID());
+        // Use modern Bukkit API with name to avoid deprecation warning (1.18.1+)
+        // UUID is necessary; name is nullable or empty for textures
+        PlayerProfile profile = Bukkit.createPlayerProfile(UUID.randomUUID(), ""); 
         PlayerTextures textures = profile.getTextures();
 
         try {

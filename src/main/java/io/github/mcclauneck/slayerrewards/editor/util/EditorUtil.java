@@ -1,7 +1,9 @@
 package io.github.mcclauneck.slayerrewards.editor.util;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
-import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.inventory.Inventory;
@@ -39,11 +41,11 @@ public class EditorUtil {
      * @param name The display name of the button.
      * @return The constructed ItemStack.
      */
-    public static ItemStack createButton(Material mat, String name) {
+    public static ItemStack createButton(Material mat, Component name) {
         ItemStack item = new ItemStack(mat);
         ItemMeta meta = item.getItemMeta();
         if (meta != null) {
-            meta.setDisplayName(ChatColor.WHITE + name);
+            meta.displayName(name.colorIfAbsent(NamedTextColor.WHITE));
             item.setItemMeta(meta);
         }
         return item;
@@ -56,7 +58,7 @@ public class EditorUtil {
      * @param name The display name of the button.
      * @return The constructed ItemStack.
      */
-    public static ItemStack createSkullButton(String b64, String name) {
+    public static ItemStack createSkullButton(String b64, Component name) {
         ItemStack item = new ItemStack(Material.PLAYER_HEAD);
         SkullMeta meta = (SkullMeta) item.getItemMeta();
         if (meta == null) return item;
@@ -77,7 +79,7 @@ public class EditorUtil {
         }
 
         meta.setOwnerProfile(profile);
-        meta.setDisplayName(ChatColor.WHITE + name);
+        meta.displayName(name.colorIfAbsent(NamedTextColor.WHITE));
         item.setItemMeta(meta);
         return item;
     }
@@ -87,7 +89,7 @@ public class EditorUtil {
      *
      * @param mobsFolder The directory containing mob files.
      * @param mobName    The name of the mob.
-     * @param page        The current page number.
+     * @param page       The current page number.
      * @param inv        The inventory being saved.
      */
     public static void savePage(File mobsFolder, String mobName, int page, Inventory inv) {
@@ -106,17 +108,20 @@ public class EditorUtil {
                 // Create a FRESH item to avoid craftitemstack issues
                 ItemStack toSave = new ItemStack(item); 
                 ItemMeta meta = toSave.getItemMeta();
-                List<String> lore = meta.getLore();
+                List<Component> lore = meta.lore();
 
                 if (lore != null && lore.size() >= 3) {
                     // Remove last 3 lines injected by openEditor
+                    // We check if the line contains "Chance" using PlainTextComponentSerializer for safety
                     int size = lore.size();
-                    if (lore.get(size - 2).contains("Chance:")) {
+                    String lineCheck = PlainTextComponentSerializer.plainText().serialize(lore.get(size - 2));
+                    
+                    if (lineCheck.contains("Chance") || lineCheck.contains("%")) {
                         lore.remove(size - 1); // Help text
                         lore.remove(size - 2); // Chance text
                         lore.remove(size - 3); // Divider
                     }
-                    meta.setLore(lore);
+                    meta.lore(lore);
                     toSave.setItemMeta(meta);
                 }
 
